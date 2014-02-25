@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:int="http://www.springframework.org/schema/integration"
+       xmlns:int-amqp="http://www.springframework.org/schema/integration/amqp"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans.xsd
+           http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+		   http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd
+           http://www.springframework.org/schema/integration/amqp http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd
+           http://www.springframework.org/schema/rabbit http://www.springframework.org/schema/rabbit/spring-rabbit.xsd">
+
+
+    <context:component-scan base-package="net.greymeister.twitchplays"/>
+    <bean id="allProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+      <property name="singleton" value="true"/>
+      <property name="ignoreResourceNotFound" value="true"/>
+      <property name="locations">
+        <list>
+          <value>classpath*:twitch-plays.properties</value>
+          <value>classpath*:overrides.properties</value>
+        </list>
+      </property>
+    </bean>
+
+    <context:property-placeholder properties-ref="allProperties"/>
+
+    <rabbit:connection-factory id="connectionFactory"
+                               host="${rabbit.server.host}"
+                               port="${rabbit.server.port}"
+                               username="${rabbit.server.username}"
+                               password="${rabbit.server.password}"/>
+
+    <int-amqp:inbound-channel-adapter channel="executorChannel"
+                                      queue-names="${rabbit.inbound.queue.name}"
+                                      connection-factory="connectionFactory"/>
+
+    <int:channel id="executorChannel">
+        <int:dispatcher task-executor="taskExecutor"/>
+    </int:channel>
+
+    <int:recipient-list-router id="routeIncomingRabbitMessages" input-channel="executorChannel">
+        <int:recipient channel="commandsChannel"/>
+        <int:recipient channel="printCommandChannel"/>
+    </int:recipient-list-router>
+
+    <int:channel id="commandsChannel"/>
+
+    <int:channel id="printCommandChannel"/>
+
+    <int:service-activator input-channel="commandsChannel" ref="commandExecutor"/>
+
+    <int:service-activator input-channel="printCommandChannel" ref="commandPrinter"/>
+
+    <bean id="taskExecutor" class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+        <property name="corePoolSize" value="5"/>
+        <property name="maxPoolSize" value="10"/>
+        <property name="queueCapacity" value="25"/>
+    </bean>
+
+</beans>
